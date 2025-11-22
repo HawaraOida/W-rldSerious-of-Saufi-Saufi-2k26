@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>VuiBlattlympics 2k26</title>
+    <title>Wörld Serious of Saufi Saufi</title>
     
     <!-- 1. Tailwind CSS für das Design -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -37,7 +37,7 @@
                 </div>
             </div>
             
-            <!-- CSV Button (bleibt oben rechts) -->
+            <!-- CSV Button -->
             <button onclick="app.exportCSV()" class="text-xs bg-emerald-800 hover:bg-emerald-900 px-3 py-2 rounded border border-emerald-600 transition flex flex-col items-center gap-1 shrink-0">
                 <span class="text-lg">📥</span> 
                 <span class="hidden sm:inline">Excel</span>
@@ -113,9 +113,10 @@
 
                         if (playersError) throw playersError;
 
+                        // HIER NEU: match_name mit abrufen
                         let { data: history, error: historyError } = await sbClient
                             .from('history')
-                            .select('date, mode, ranking')
+                            .select('date, mode, ranking, match_name')
                             .order('date', { ascending: false });
                         
                         if (historyError) throw historyError;
@@ -171,12 +172,14 @@
                         if (insertPlayersError) throw insertPlayersError;
 
                         if (newHistoryEntry && newHistoryEntry.date) {
+                            // HIER NEU: match_name mitspeichern
                             const { error: insertHistoryError } = await sbClient
                                 .from('history')
                                 .insert([{
                                     date: newHistoryEntry.date,
                                     mode: newHistoryEntry.mode,
-                                    ranking: newHistoryEntry.ranking.join(', ')
+                                    ranking: newHistoryEntry.ranking.join(', '),
+                                    match_name: newHistoryEntry.match_name || '' // Neuer Wert
                                 }]);
                             if (insertHistoryError) throw insertHistoryError;
                         }
@@ -231,6 +234,10 @@
             },
 
             submitMatch() {
+                // Match Name auslesen
+                const matchNameInput = document.getElementById('match-name-input');
+                const matchName = matchNameInput ? matchNameInput.value : '';
+
                 const inputs = [];
                 for(let i=0; i<8; i++) {
                     const el = document.getElementById(`match-select-${i}`);
@@ -289,7 +296,8 @@
                 const newHistoryEntry = {
                     date: new Date().toLocaleDateString('de-DE', { day:'2-digit', month:'2-digit', hour: '2-digit', minute: '2-digit' }),
                     mode: this.data.winnerMode,
-                    ranking: activeIds
+                    ranking: activeIds,
+                    match_name: matchName // Name wird hier ins Objekt gepackt
                 };
 
                 const btn = document.getElementById('submit-btn');
@@ -303,7 +311,8 @@
                         this.render();
                     })
                     .catch((e) => {
-                        alert("Fehler beim Speichern! Prüfe Internet/RLS Policies.");
+                        alert("Fehler beim Speichern! Haben Sie die Spalte 'match_name' in Supabase angelegt?");
+                        console.error(e);
                         if(btn) btn.innerText = "Berechnen & Speichern";
                     });
             },
@@ -314,10 +323,11 @@
                     csv += `${i+1},${p.name},${Math.round(p.elo)},${p.matches},${p.wins}\n`;
                 });
                 
-                csv += "\nMATCH HISTORY\nDATUM,MODUS,PLATZIERUNG...\n";
+                csv += "\nMATCH HISTORY\nDATUM,NAME,MODUS,PLATZIERUNG...\n";
                 this.data.history.forEach(m => {
                     const names = m.ranking.map(rid => this.data.players.find(p => p.id === rid)?.name).join(", ");
-                    csv += `${m.date},${m.mode === 1 ? 'WinnerOnly' : 'Ranked'},"${names}"\n`;
+                    // CSV auch erweitert um Match Name
+                    csv += `${m.date},"${m.match_name || ''}",${m.mode === 1 ? 'WinnerOnly' : 'Ranked'},"${names}"\n`;
                 });
 
                 const link = document.createElement("a");
@@ -396,10 +406,13 @@
                         return `<span class="px-2 py-1 rounded text-xs border ${style}">${idx+1}. ${name}</span>`;
                     }).join(' ');
 
+                    // HIER NEU: Match Name anzeigen wenn vorhanden
+                    const matchTitle = m.match_name ? `<span class="font-bold text-emerald-700">"${m.match_name}"</span> - ` : '';
+
                     html += `
                         <div class="bg-white p-3 rounded shadow-sm border-l-4 border-emerald-500">
                             <div class="flex justify-between text-[10px] text-slate-400 mb-1 uppercase tracking-wide">
-                                <span>${m.date}</span>
+                                <span>${matchTitle}${m.date}</span>
                                 <span>${m.mode === 1 ? 'Winner Only' : 'Ranked'}</span>
                             </div>
                             <div class="flex flex-wrap gap-1">${namesHtml}</div>
@@ -422,6 +435,12 @@
                             <button onclick="app.setWinnerMode(1)" class="flex-1 p-2 rounded border text-xs ${!isRanked ? 'bg-emerald-600 text-white border-emerald-600 shadow-inner' : 'bg-slate-50 text-slate-600'}">
                                 <strong>Winner Only</strong><br>Nur 1. Platz
                             </button>
+                        </div>
+
+                        <!-- HIER NEU: Eingabefeld für Match-Name -->
+                        <div class="mb-6">
+                            <label class="block text-xs text-slate-500 uppercase font-bold mb-2">Name der Partie (Optional)</label>
+                            <input type="text" id="match-name-input" placeholder="z.B. Finale Grande, Saufi am See..." class="w-full p-2 border rounded text-sm focus:border-emerald-500 outline-none bg-slate-50">
                         </div>
 
                         <div class="space-y-3 mb-6">`;
@@ -472,8 +491,3 @@
     </script>
 </body>
 </html>
-
-
-
-
-
